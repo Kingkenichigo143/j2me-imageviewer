@@ -1,0 +1,29 @@
+Fully functional Image Viewer for J2ME phones and devices
+
+A useful MIDlet to view locally stored images at full resolution. It can only display image types that your phone's java virtual machine (KVM) natively supports; at minimum all KVM support PNG images; support for other image types such as JPG, GIF, BMP varies by phone.  Can display image size up to 1/2 available KVM memory. Transform operations (rotate, zoom) require more memory. (note: loaded images use 4 bytes/pixel memory.)
+
+Hardware Requirement: CLDC 1.1 + MIDP 2.0
+
+Features:
+* Tiny <15K.  Will run on most non-smart phones with java support.
+* Local file system access (jsr75)
+* Pan/Scroll
+* Full screen
+* 1:1 / 100% image view
+* Zoom out: 50%, 33%, 25%.
+* Rotate by 90 degree. Centered on current image pan location.
+* MRU : uses RMS to remember most recently accfessed folder and images
+* Info : basic info page showing image dimensions, folder, free KVM memory 
+* optional acceleration sensor auto-rotate (as tested and calibrated on my phone)(jsr256)
+* Fast (as practical). 
+* Handles Out of Memory error without crashing (usually).
+
+Key Commands: {OK} Toggle full screen. {Arrows/4/6/8/2} Pan/scroll. {#/`*`} Zoom. {0} Rotate
+
+credits: Inspired by and framework taken from 	baigosviewer.  j2me-imageviewer fills out all the functionality, bug fixes and adds bells-and-whistles.
+GPL <a href="http://findicons.com/icon/238004/gwenview?width=32">eye-icon</a> by Oxygen Team
+
+developed on LG Java ME SDK and netbeans 7.0, tested on LG GD570 dLite flip phone.
+
+links to <a href="http://code.google.com/p/j2me-imageviewer/source/browse/#svn%2Ftrunk">*SOURCE</a> & <a href="http://code.google.com/p/j2me-imageviewer/downloads/list">BINARY</a> FILES*
+
