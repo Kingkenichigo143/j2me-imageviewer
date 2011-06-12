@@ -1,0 +1,11 @@
+MIDlet-1: J2MEImageViewer, eye.png, ImageViewer
+MIDlet-Description: basic 1:1 image viewer with bells and whistles
+MIDlet-Icon: eye.png
+MIDlet-Jar-Size: 14715
+MIDlet-Jar-URL: J2MEImageViewer.jar
+MIDlet-Name: J2MEImageViewer
+MIDlet-Permissions: javax.microedition.io.Connector.file.read
+MIDlet-Vendor: DLC
+MIDlet-Version: 1.0
+MicroEdition-Configuration: CLDC-1.1
+MicroEdition-Profile: MIDP-2.1
