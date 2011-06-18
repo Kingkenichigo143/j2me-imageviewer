@@ -14,15 +14,16 @@ Features:
 * Rotate by 90 degree. Centered on current image pan location.
 * MRU : uses RMS to remember most recently accfessed folder and images
 * Info : basic info page showing image dimensions, folder, free KVM memory 
-* Fast (as practical). 
-* Handles Out of Memory error without crashing
-* optional acceleration sensor auto-rotate (as tested and calibrated on my phone)(jsr256) install on your phone using j2me-imageviewer-autorotate.jad
+* Fast (as practical)
+* Handles Out of Memory without crashing
+* optional acceleration sensor auto-rotate (as tested and calibrated on my phone)(jsr256) use j2me-imageviewer-autorotate.jad to install
 
 Key Commands: {OK} Toggle full screen. {Arrows/4/6/8/2} Pan/scroll. {#/`*`} Zoom. {0} Rotate
 
-credits: Inspired by and framework taken from 	baigosviewer.  j2me-imageviewer fills out all the functionality, bug fixes and adds bells-and-whistles.
-GPL <a href="http://findicons.com/icon/238004/gwenview?width=32">eye-icon</a> by Oxygen Team
+credits: Inspired by and framework taken from <a href="http://code.google.com/p/baigosviewer/">baigosviewer</a>.  j2me-imageviewer fills out all the functionality, bug fixes and adds bells-and-whistles.
+GPL <a href="http://findicons.com/icon/238004/gwenview?width=32">eye-icon</a> by <a href="http://www.oxygen-icons.org/">Oxygen Team</a>.
 
 developed on LG Java ME SDK and netbeans 7.0, tested on LG GD570 dLite flip phone.
 
 links to <a href="http://code.google.com/p/j2me-imageviewer/source/browse/#svn%2Ftrunk">*SOURCE</a> & <a href="http://code.google.com/p/j2me-imageviewer/downloads/list">BINARY</a> FILES*
+

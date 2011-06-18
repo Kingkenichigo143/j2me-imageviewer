@@ -302,10 +302,12 @@ public class ScrollCanvas extends Canvas {
         final int nextOrientation;
         final int currOrientation = orientation;
         
+        System.out.println("riip: " + direction);
+        
         if(direction == ROTATE_CW) {
             nextOrientation = (orientation+1)%4;
         } else if(direction == ROTATE_CCW) {
-            nextOrientation = (orientation-1)%4;
+            nextOrientation = (orientation-1+4)%4;  //+4 because % returns negative if dividend < 0 
         } else { return; }
         
         im = null;
@@ -406,6 +408,7 @@ public class ScrollCanvas extends Canvas {
 //                             int x_dest,
 //                             int y_dest,
 //                             int anchor)
+        System.out.println("ri2: " + orientation);
         // out of memory if rotate all at one shot, so draw in 100x100 regions
         int transform;
         Image newImage;
