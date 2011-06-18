@@ -6,9 +6,14 @@ import javax.microedition.lcdui.*;
 import javax.microedition.lcdui.game.Sprite;
 
 public class ScrollCanvas extends Canvas {
-    public static int ROTATE_CCW = 2;
-    public static int ROTATE_CW  = 1;
-
+    public static final int ROTATE_CCW = 2;
+    public static final int ROTATE_CW  = 1;
+    
+    public static final int ORIENT_UP = 0;
+    public static final int ORIENT_RIGHT = 1;
+    public static final int ORIENT_DOWN = 2;
+    public static final int ORIENT_LEFT = 3;
+    
     // scroll amount
     int                 xscroll;
     int                 yscroll;
@@ -17,25 +22,24 @@ public class ScrollCanvas extends Canvas {
     private int         dispWidth, dispHeight;
     FileConnection      fconn;
     Image               im;
-    private Image       imoriginal;
-    private ImageViewer midlet;
+    Image               imoriginal;
+    private final ImageViewer midlet;
 
     // private Command salir;
     // private Command zoom;
     private int x, y, w, h;
-    private int zoomlevel;
-
+    private int zoomlevel = 1;
+    int         orientation;
+    
     public ScrollCanvas(ImageViewer mid, String filename) {
         setFullScreenMode(isFullScreen);
-        dispWidth  = getWidth();
+        dispWidth = getWidth();
         dispHeight = getHeight();
 
         // scroll 1/3 screen size
         xscroll = dispWidth / 3;
         yscroll = dispHeight / 3;
 
-        // zoom = new Command("Zoom",Command.SCREEN,1);
-        // this.addCommand(zoom);
         this.midlet = mid;
 
         final String filen = filename;
@@ -46,9 +50,9 @@ public class ScrollCanvas extends Canvas {
 
             InputStream in = fconn.openInputStream();
 
-            im = Image.createImage(in);
+            imoriginal = Image.createImage(in);
             in.close();
-	} catch (OutOfMemoryError e) {
+        } catch (OutOfMemoryError e) {
             throw e;
         } catch (Exception e) {
             System.out.println(e);
@@ -57,12 +61,17 @@ public class ScrollCanvas extends Canvas {
 
         x = 0;
         y = 0;
-        imoriginal = Image.createImage(im);
+        im = Image.createImage(imoriginal);
         w = im.getWidth();
         h = im.getHeight();
+        orientation = ORIENT_UP;
     }
 
     public void paint(Graphics g) {
+        if(im == null) {
+            return;
+        }
+        
         String zm = "";
 
         g.setColor(255, 255, 255);
@@ -107,7 +116,13 @@ public class ScrollCanvas extends Canvas {
     }
 
     void scrollImage(int keyCode, double scrollAccel) {
-        int keyAction = getGameAction(keyCode);
+        int keyAction;
+        try {
+            keyAction = getGameAction(keyCode);           
+        } catch (IllegalArgumentException e) {
+            System.out.println("keyCode:" + keyCode + " caused IllegalArgumentException in getGameAction(keyCode)");                        
+            keyAction = 0;
+        }
 
         if (keyAction == 0) {
             keyAction = keyCode;
@@ -186,6 +201,20 @@ public class ScrollCanvas extends Canvas {
         repaint();
     }
 
+    public void zoomin() {
+        if (zoomlevel != 1) {
+            zoomlevel--;
+        }
+        rescaleImage(zoomlevel);
+    }
+ 
+    public void zoomout() {
+        if (zoomlevel != 5) {
+            zoomlevel++;
+        }
+        rescaleImage(zoomlevel);
+    }
+    
     public void rescaleImage(int zoom) {
 
         /*
@@ -197,14 +226,14 @@ public class ScrollCanvas extends Canvas {
          * 5=fit to screen
          */
 
-        //
         showZoomStatus = true;
         zoomlevel      = zoom;
         im             = imoriginal;
-        x              = 0;
-        y              = 0;
         w              = im.getWidth();
         h              = im.getHeight();
+        x              = 0;
+        y              = 0;
+        orientation    = ORIENT_UP;
 
         if (zoom == 1) {           // return original image (fasterrrrrrrrrrrr)!!
             repaint();
@@ -214,6 +243,9 @@ public class ScrollCanvas extends Canvas {
             zoom = w / getWidth();
         }
 
+        im             = null;
+        System.gc();
+        
 //      double d_zoom = (double) zoom;  
         int d_zoom = zoom;
 
@@ -226,8 +258,9 @@ public class ScrollCanvas extends Canvas {
         
         try { newImage = Image.createImage(width, height); }
         catch (OutOfMemoryError e) { 
-            midlet.alert("Out of Memory!");
+            midlet.alert("Out of Memory! [resi]");
             System.gc();
+            im = imoriginal;
             return; 
         }
         
@@ -247,7 +280,7 @@ public class ScrollCanvas extends Canvas {
 
             g.drawRGB(rgb_buf, 0, width, 0, y, width, 1, false);
 
-// slow
+// too slow
 //          for (int x = 0; x < width; x++) {
 //
 //              // void getRGB(int[] rgbData, int offset, int scanlength, int x, int y, int width, int height)
@@ -258,20 +291,213 @@ public class ScrollCanvas extends Canvas {
 
         System.out.println("zoom finish");
         im = newImage;
-        x  = 0;
-        y  = 0;
         w  = im.getWidth();
         h  = im.getHeight();
         repaint();
     }
 
+    // low memory rotate at 100% zoom
+    private void rotateImageInPlace(int direction) 
+    {
+        final int nextOrientation;
+        final int currOrientation = orientation;
+        
+        if(direction == ROTATE_CW) {
+            nextOrientation = (orientation+1)%4;
+        } else if(direction == ROTATE_CCW) {
+            nextOrientation = (orientation-1)%4;
+        } else { return; }
+        
+        im = null;
+        System.gc();
+      
+        try {
+            im = rotateImage(imoriginal, nextOrientation);
+            rotateImageViewCenter(currOrientation, nextOrientation); // recalcs x,y
+            w = im.getWidth();
+            h = im.getHeight();
+
+        } catch (OutOfMemoryError e) {
+            // try again
+            System.gc();
+
+            try {
+                im = rotateImage(imoriginal, nextOrientation);
+                rotateImageViewCenter(currOrientation, nextOrientation);
+                w = im.getWidth();
+                h = im.getHeight();
+            } catch (OutOfMemoryError e2) {
+                midlet.alert("Out of Memory! [riip]");
+                Runnable runn = new Runnable() {
+                    public void run() {
+                        System.gc();
+                        im = imoriginal;
+                        w = im.getWidth();
+                        h = im.getHeight();
+                        orientation = ScrollCanvas.ORIENT_UP;
+                        repaint();
+//                        midlet.commandAction(midlet.back, ScrollCanvas.this);
+                    }
+                };
+                delayCallSerially(1000, runn);
+                return;
+            }
+        }
+
+        repaint();
+        
+    }
+    
+    void delayCallSerially(final long msec, final Runnable runn)
+    {
+        new Thread(
+            new Runnable() {
+                public void run() {
+                    synchronized(Thread.currentThread()) {
+                        try { Thread.currentThread().wait(msec); } 
+                        catch (Exception ew) { System.out.println("dcs:" + ew); }
+                    }
+                    Display.getDisplay(midlet).callSerially(runn);
+                } 
+            }
+
+        ).start();
+    }
+
+    // calculate the new (-x,-y) top left rotated image 
+    private void rotateImageViewCenter(int orientation, int nextOrientation)
+    {
+        int dispHeight_2 = dispHeight/2;
+        int dispWidth_2 = dispWidth/2;
+        int cx, cy; // center
+        int x_anchor = -this.x;
+        int y_anchor = -this.y;
+        int h = this.h;
+        int w = this.w;
+        
+        cx = x_anchor + dispWidth_2;
+        cy = y_anchor + dispHeight_2;
+        
+        // CW rotate the center point until we reach nextOrientation
+        for(; orientation%4 != nextOrientation; orientation++) {
+            // each rotation swaps h,w
+            int temp = w; w = h; h = temp;
+            int cy0 = cy; cy = cx; cx = w - cy0;            
+        }
+        
+        x_anchor = cx - dispWidth_2;
+        y_anchor = cy - dispHeight_2;
+        
+        this.x = -x_anchor;
+        this.y = -y_anchor;
+    }
+    
+    // h, w is dimension of imSrc
+    private Image rotateImage (Image imSrc, int orientation) 
+            throws OutOfMemoryError
+    {
+
+//      public void drawRegion(Image src,
+//                             int x_src,
+//                             int y_src,
+//                             int width,
+//                             int height,
+//                             int transform,
+//                             int x_dest,
+//                             int y_dest,
+//                             int anchor)
+        // out of memory if rotate all at one shot, so draw in 100x100 regions
+        int transform;
+        Image newImage;
+        Image im = imoriginal;
+        int w_imorig  = im.getWidth();
+        int h_imorig  = im.getHeight();
+
+        this.orientation = orientation;
+        
+        if (orientation == ORIENT_RIGHT) {
+            newImage = Image.createImage(h_imorig, w_imorig);
+            Graphics g = newImage.getGraphics();
+            transform = Sprite.TRANS_ROT90;
+
+            for (int ychunk = 0; ychunk * 100 < h_imorig; ychunk++) {
+                int destx = Math.max(0, h_imorig - ychunk * 100 - 100);
+                int regionh = Math.min(100, h_imorig - ychunk * 100);
+
+                for (int xchunk = 0; xchunk * 100 < w_imorig; xchunk++) {
+                    int desty   = xchunk * 100;
+                    int regionw = Math.min(100, w_imorig - xchunk * 100);
+
+                    g.drawRegion(im, xchunk * 100, ychunk * 100, regionw, regionh, transform, destx, desty,
+                                 Graphics.TOP | Graphics.LEFT);
+                }
+            }
+
+        } else if (orientation == ORIENT_LEFT) {
+            newImage = Image.createImage(h_imorig, w_imorig);
+            Graphics g = newImage.getGraphics();
+            transform = Sprite.TRANS_ROT270;
+
+            for (int ychunk = 0; ychunk * 100 < h_imorig; ychunk++) {
+                int destx = ychunk * 100;
+                int regionh = Math.min(100, h_imorig - ychunk * 100);
+
+                for (int xchunk = 0; xchunk * 100 < w_imorig; xchunk++) {
+                    int desty   = Math.max(0, w_imorig - xchunk * 100 - 100);
+                    int regionw = Math.min(100, w_imorig - xchunk * 100);
+
+                    g.drawRegion(im, xchunk * 100, ychunk * 100, regionw, regionh, transform, destx, desty,
+                                 Graphics.TOP | Graphics.LEFT);
+                }
+            }
+            
+        } else if (orientation == ORIENT_DOWN) {  
+            newImage = Image.createImage(w_imorig, h_imorig);
+            Graphics g = newImage.getGraphics();
+            transform = Sprite.TRANS_ROT180;
+
+            for (int ychunk = 0; ychunk*100 < h_imorig; ychunk++) {
+                int desty = Math.max(0, h_imorig - ychunk*100 - 100);
+                int regionh = Math.min(100, h_imorig - ychunk*100);
+
+                for (int xchunk = 0; xchunk*100 < w_imorig; xchunk++) {
+                    int destx   = Math.max(0, w_imorig - xchunk*100 - 100);
+                    int regionw = Math.min(100, w_imorig - xchunk*100);
+
+                    g.drawRegion(im, xchunk*100, ychunk*100, regionw, regionh, transform, destx, desty,
+                                 Graphics.TOP | Graphics.LEFT);
+                }
+            }
+
+        } else { // ORIENT_UP
+            return Image.createImage(imSrc);
+        }
+        
+        return newImage;        
+    }
+
+    
     public void rotateImage(int direction) {
+        
+        // uses different method for 100% zoom rotate and zoom out rotate
+        // for better memory use during 100% zoom, and zoom out rotate 
+        // rotates zoomed image, and handles Out of Memory error
+        // without losing zoomed image (resetting it back to imoriginal)
+        
+        // 100% zoom rotate
+        if(zoomlevel == 1) {
+            rotateImageInPlace(direction);
+            return;
+        }
+        
+        // zoomed rotate
         Image newImage;
 
         try {
             newImage = Image.createImage(h, w);
         } catch (OutOfMemoryError e) {
-            midlet.alert("Out of Memory!");
+            newImage = null;
+            midlet.alert("Out of Memory! [roti]");
             System.gc();
             return;
         }
@@ -315,6 +541,7 @@ public class ScrollCanvas extends Canvas {
             y = x0 + (dispWidth-dispHeight)/2;
             x = -x;
             y = -y;
+            orientation = (orientation+1)%4;
             
         } else if (direction == ROTATE_CCW) {
             transform = Sprite.TRANS_ROT270;
@@ -337,16 +564,19 @@ public class ScrollCanvas extends Canvas {
             x = y0 + (dispHeight-dispWidth)/2;
             x = -x;
             y = -y;
+            orientation = (orientation-1)%4;
             
         } else {
             return;
         }
 
         im = newImage;
-//        x  = 0;
-//        y  = 0;
         w  = im.getWidth();
         h  = im.getHeight();
+        
+        newImage = null;
+        System.gc();
+        
         repaint();
     }
 
@@ -357,5 +587,5 @@ public class ScrollCanvas extends Canvas {
         xscroll    = dispWidth / 3;
         yscroll    = dispHeight / 3;
     }
-}
 
+}

@@ -1,5 +1,6 @@
 import java.io.*;
-import java.util.*;
+import java.util.Enumeration;
+import java.util.Stack;
 
 import javax.microedition.io.*;
 import javax.microedition.io.file.*;
@@ -7,6 +8,8 @@ import javax.microedition.lcdui.*;
 import javax.microedition.midlet.*;
 import javax.microedition.rms.*;
 import javax.microedition.sensor.*;
+
+// autorotate enabled only if jad contains "auto-rotate: true"
 
 class AccelSensor implements Runnable {
     protected SensorConnection sconn;
@@ -20,14 +23,21 @@ class AccelSensor implements Runnable {
 	this.parent = parent;
         String sprop = System.getProperty("microedition.sensor.version");
 
-        if (sprop == null) {
+        // autorotate enabled only if jad contains "auto-rotate: true"
+        String propAutoRotate = parent.getAppProperty("auto-rotate"); 
+
+        if (sprop == null
+            || propAutoRotate == null 
+            || !propAutoRotate.toLowerCase().equals("true")) 
+        {
             hasSensor = false;
+            return;
         }
 
         try {
             sconn = (SensorConnection) Connector.open("sensor:acceleration");
-	    hasSensor = true;
-	} catch (Exception e) {
+            hasSensor = true;
+        } catch (Exception e) {
             hasSensor = false;
         }
     }
@@ -166,16 +176,14 @@ public class ImageViewer extends MIDlet implements CommandListener {
     Command              exit      = new Command("Exit", Command.EXIT, 3);
     Command              back      = new Command("Back", Command.BACK, 2);
     Command              zoomin    = new Command("zoom +", Command.SCREEN, 1);
-    private int          zoomlevel = 1;
     Command              zoomout   = new Command("zoom -", Command.SCREEN, 1);
     Command              imginfo   = new Command("info", Command.SCREEN, 2);
     
     MRU                  mru       = new MRU();
     List                 browser;
     private String       currDirName;
-    private Display      display;
     private ScrollCanvas image;
-    private ImgInfo      imgInfoForm;
+    private Form         imgInfoForm;
     boolean              rotatef;
     
     AccelSensor          accelSensor;
@@ -300,6 +308,7 @@ public class ImageViewer extends MIDlet implements CommandListener {
     public void commandAction(Command c, Displayable d) {
 
         System.out.println("command:" + c + " displayable:" + d);
+        
         if (c == view) {
             List         curr     = (List) d;
             final String currFile = curr.getString(curr.getSelectedIndex());
@@ -317,16 +326,25 @@ public class ImageViewer extends MIDlet implements CommandListener {
                 }
             }).start();
         } else if (c == back) {
-            if(d == image) {
+            if (d == image) {
 // Put in separate thread to avoid in emulator:
 // java.lang.RuntimeException: Blocking call performed in the event thread 
-		 new Thread(new Runnable() { 
-		     public void run() {
+                
+                // reclaim memory
+                Display.getDisplay(this).setCurrent(null);
+                image.im = null;
+                image.imoriginal = null;
+                image = null;
+                System.gc();
+                
+                new Thread(new Runnable() {
+
+                    public void run() {
                         System.out.println("scd thread");
-               		 showCurrDir();
-		     }}
-		     ).start();
-            } else if(d == imgInfoForm) {
+                        showCurrDir();
+                    }
+                }).start();
+            } else if (d == imgInfoForm) {
                 Display.getDisplay(this).setCurrent(image);
             }
         } else if (c == rotate) {
@@ -335,21 +353,14 @@ public class ImageViewer extends MIDlet implements CommandListener {
         } else if (c == rotateccw) {
             image.rotateImage(ScrollCanvas.ROTATE_CCW);
         } else if (c == zoomin) {
-            if (zoomlevel != 1) {
-                zoomlevel--;
-            }
+            image.zoomin();
 
-            image.rescaleImage(zoomlevel);
         } else if (c == zoomout) {
-            if (zoomlevel != 5) {
-                zoomlevel++;
-            }
-
-            image.rescaleImage(zoomlevel);
+            image.zoomout();
              
         } else if (c == imginfo) {
-            // maybe move this code to a separate method
-            imgInfoForm = new ImgInfo("Image Info");
+            // maybe move this code to a separate method or class
+            imgInfoForm = new Form("Image Info");
             imgInfoForm.append("Width: " + image.im.getWidth());
             imgInfoForm.append("Height: " + image.im.getHeight());
             imgInfoForm.append("Name: " + image.fconn.getName());
@@ -448,16 +459,36 @@ public class ImageViewer extends MIDlet implements CommandListener {
         showCurrDir();
     }
 
+    private int showFileRetry = 0; // showFile retry state by retry using callSerially to give KVM chance to free memroy
     void showFile(String fileName) {
+        final String ffileName = fileName;
         if (fileName.startsWith("/")) {
             fileName = fileName.substring(1);
         }
+        System.out.println("free:" + Runtime.getRuntime().freeMemory());
+        System.out.println("image: " + image);
+
 
         try {
-        image = new ScrollCanvas(this, "file:///" + fileName);
+            image = new ScrollCanvas(this, "file:///" + fileName);
         } catch (OutOfMemoryError e) {
             System.gc();
-            alert("Out of memory!");
+            
+            // stop retrying showFile() at # tries
+            if(showFileRetry == 2) {
+                alert("Out of memory! [sf]");
+                showFileRetry = 0;
+                return;
+            }
+            
+            showFileRetry += 1;
+            Runnable runnable = new Runnable() {
+                public void run() {
+                    System.out.println("serial rerun showFile(" + ffileName + " #" + showFileRetry);
+                    showFile(ffileName);
+                }
+            };
+            Display.getDisplay(this).callSerially(runnable);
             return;
         }
         mru.files.removeElement(fileName);
@@ -484,15 +515,13 @@ public class ImageViewer extends MIDlet implements CommandListener {
         alert.setString(msg);
         System.out.println("alert " + msg);
         Display d = Display.getDisplay(this);
+
         d.vibrate(100);
-        synchronized(d) {
-            d.setCurrent(alert, d.getCurrent());
-            try { d.wait(1000); } catch (Exception e) {}
-        }
+        d.setCurrent(alert);
     }
 }
 
-
+// Most Recently Used data struct.  Stores 1 path entry, up to 3 file entries.  
 class MRU {
     Stack  files;
     String path;
@@ -502,10 +531,11 @@ class MRU {
         files = new Stack();
     }
 
+    // add MRU entries to file browser (List) screen
     void addToList(List browser) {
         String s;
 
-        if ((path != null) &&!path.equals("")) {
+        if ((path != null) && !path.equals("")) {
             browser.append(path, null);
         }
 
